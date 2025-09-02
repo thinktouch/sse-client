@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SSE HTTP POST Client</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.2.0/github-markdown.min.css">
+<style>
+body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; }
+#settings { padding: 10px; background: #f4f4f4; }
+#settings input, #settings textarea { width: 100%; margin: 5px 0; }
+#chat { flex: 1; overflow-y: auto; padding: 10px; background: white; }
+.message { margin: 10px 0; display: flex; }
+.message.user { justify-content: flex-end; }
+.message.assistant { justify-content: flex-start; }
+.message .bubble { max-width: 80%; padding: 8px 12px; border-radius: 8px; }
+.message.user .bubble { background: #dcf8c6; }
+.message.assistant .bubble { background: #f1f0f0; }
+#input-area { display: flex; padding: 10px; background: #f4f4f4; }
+#input-area textarea { flex: 1; resize: none; }
+#input-area button { margin-left: 10px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<div id="settings">
+  <input id="url" placeholder="Request URL" />
+  <input id="token" placeholder="Token (optional)" />
+  <textarea id="body" rows="4" placeholder='{"message":"{{prompt}}"}'></textarea>
+</div>
+<div id="chat"></div>
+<div id="input-area">
+  <textarea id="prompt" rows="2" placeholder="Enter message..."></textarea>
+  <button id="send">Send</button>
+</div>
+<script>
+const chat = document.getElementById('chat');
+const sendBtn = document.getElementById('send');
+sendBtn.addEventListener('click', async () => {
+   const url = document.getElementById('url').value.trim();
+   const token = document.getElementById('token').value.trim();
+   const bodyTemplate = document.getElementById('body').value;
+   const prompt = document.getElementById('prompt').value;
+   if(!url) return alert('URL required');
+   addMessage(prompt, 'user');
+   document.getElementById('prompt').value = '';
+   let bodyStr = bodyTemplate.replace(/{{prompt}}/g, prompt);
+   let body;
+   try {
+      body = JSON.stringify(JSON.parse(bodyStr));
+   } catch(e) {
+      return alert('Body must be valid JSON');
+   }
+   const msgEl = addMessage('', 'assistant');
+   const contentEl = msgEl.querySelector('.bubble');
+   try {
+     const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? {'Authorization': 'Bearer ' + token} : {})
+        },
+        body
+     });
+     if(!resp.body) {
+        contentEl.textContent = await resp.text();
+        return;
+     }
+     const reader = resp.body.getReader();
+     const decoder = new TextDecoder();
+     let buffer = '';
+     while(true) {
+       const {value, done} = await reader.read();
+       if(done) break;
+       buffer += decoder.decode(value, {stream: true});
+       const parts = buffer.split('\n\n');
+       buffer = parts.pop();
+       for(const part of parts) {
+          const lines = part.split('\n').filter(l => l.startsWith('data:'));
+          const data = lines.map(l => l.replace(/^data: ?/, '')).join('\n');
+          if(data === '[DONE]') return;
+          contentEl.innerHTML += marked.parse(data);
+          chat.scrollTop = chat.scrollHeight;
+       }
+     }
+   } catch(err) {
+     contentEl.textContent = err.message;
+   }
+});
+function addMessage(text, role){
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message ' + role;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble markdown-body';
+  bubble.innerHTML = marked.parse(text);
+  wrapper.appendChild(bubble);
+  chat.appendChild(wrapper);
+  chat.scrollTop = chat.scrollHeight;
+  return wrapper;
+}
+</script>
+</body>
+</html>
