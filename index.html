@@ -69,11 +69,12 @@ body {
   padding: 16px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr 1fr;
-  grid-template-areas: "url token";
+  grid-template-columns: 1fr 1fr auto;
+  grid-template-areas: "url token actions";
 }
 #url { grid-area: url; }
 #token { grid-area: token; }
+#settings .actions { grid-area: actions; display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
 
 #settings input {
   width: 100%;
@@ -163,6 +164,17 @@ body {
 #input-area button:hover { filter: brightness(1.05); }
 #input-area button:active { transform: translateY(1px); }
 
+/* Ghost buttons for settings actions */
+.ghost-btn {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.ghost-btn:hover { background: var(--soft); }
+
 /* Responsive */
 @media (max-width: 720px) {
   #settings { grid-template-columns: 1fr; grid-template-areas: "url" "token"; }
@@ -179,6 +191,11 @@ body {
   <div id="settings" class="card">
   <input id="url" placeholder="Request URL" />
   <input id="token" placeholder="Token (optional)" />
+  <div class="actions">
+    <input id="config-file" type="file" accept="application/json" style="display:none" />
+    <button id="import-config" class="ghost-btn" title="Import config.json">Import</button>
+    <button id="export-config" class="ghost-btn" title="Export config.json">Export</button>
+  </div>
   </div>
   <div id="chat" class="card"></div>
   <div id="input-area" class="card">
@@ -189,6 +206,80 @@ body {
 <script>
 const chat = document.getElementById('chat');
 const sendBtn = document.getElementById('send');
+const urlEl = document.getElementById('url');
+const tokenEl = document.getElementById('token');
+const importBtn = document.getElementById('import-config');
+const exportBtn = document.getElementById('export-config');
+const configFileEl = document.getElementById('config-file');
+const CONFIG_KEY = 'sse_client_config_v1';
+
+// Config persistence helpers
+function saveConfigToLocal() {
+  try {
+    const cfg = { url: urlEl.value || '', token: tokenEl.value || '' };
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+  } catch {}
+}
+function loadConfigFromLocal() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+async function loadConfigFromFileNearby() {
+  // Attempt to fetch ./sse-client.config.json if hosted via http(s). Ignore errors.
+  try {
+    const res = await fetch('./sse-client.config.json', { cache: 'no-store' });
+    if (!res.ok) return null;
+    const cfg = await res.json();
+    return cfg;
+  } catch { return null; }
+}
+function hydrateConfig(cfg) {
+  if (!cfg) return;
+  if (typeof cfg.url === 'string') urlEl.value = cfg.url;
+  if (typeof cfg.token === 'string') tokenEl.value = cfg.token;
+}
+
+// Initialize config: localStorage first, then optional file override
+(async function initConfig(){
+  hydrateConfig(loadConfigFromLocal());
+  const fileCfg = await loadConfigFromFileNearby();
+  if (fileCfg) {
+    hydrateConfig(fileCfg);
+    saveConfigToLocal();
+  }
+})();
+
+// Persist on change
+urlEl.addEventListener('input', saveConfigToLocal);
+tokenEl.addEventListener('input', saveConfigToLocal);
+
+// Export / Import
+exportBtn.addEventListener('click', () => {
+  const data = { url: urlEl.value || '', token: tokenEl.value || '' };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sse-client.config.json';
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  a.remove();
+});
+importBtn.addEventListener('click', () => configFileEl.click());
+configFileEl.addEventListener('change', async () => {
+  const file = configFileEl.files && configFileEl.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const cfg = JSON.parse(text);
+    hydrateConfig(cfg);
+    saveConfigToLocal();
+  } catch {}
+  configFileEl.value = '';
+});
 // Ensure immediate scroll to bottom, bypassing smooth behavior during streaming
 function scrollToBottomInstant() {
   const prev = chat.style.scrollBehavior;
@@ -215,6 +306,7 @@ sendBtn.addEventListener('click', async () => {
    if(!url) return alert('URL required');
    addMessage(prompt, 'user');
    document.getElementById('prompt').value = '';
+   saveConfigToLocal();
    const body = prompt; // use message as raw request body
    const msgEl = addMessage('', 'assistant');
    const contentEl = msgEl.querySelector('.bubble');
