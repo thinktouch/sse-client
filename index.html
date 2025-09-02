@@ -132,11 +132,25 @@ body {
   align-items: flex-end;
   padding: 10px;
 }
+#input-area .send-col { display:flex; flex-direction:column; gap:8px; align-items:stretch; }
+#input-area .send-tools { display:flex; flex-direction:column; gap:8px; }
+#input-area .send-col .ghost-btn { width: 100%; }
+#input-area .editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#input-area .status {
+  margin-left: auto;
+  font-size: 12px;
+}
+#input-area .status.ok { color: #059669; }
+#input-area .status.err { color: #dc2626; }
 #input-area textarea {
   flex: 1;
   resize: vertical;
-  min-height: 46px;
-  max-height: 240px;
+  min-height: 120px;
+  max-height: 360px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   background: var(--soft);
@@ -144,12 +158,17 @@ body {
   border-radius: 6px;
   outline: none;
   transition: box-shadow .12s ease, border-color .12s ease, background .12s ease;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.45;
 }
 #input-area textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 18%, transparent);
   background: transparent;
 }
+#input-area textarea.json-ok { border-color: #059669; box-shadow: 0 0 0 2px color-mix(in oklab, #059669 18%, transparent); }
+#input-area textarea.json-err { border-color: #dc2626; box-shadow: 0 0 0 2px color-mix(in oklab, #dc2626 18%, transparent); }
 #input-area button {
   padding: 10px 16px;
   border-radius: 6px;
@@ -199,8 +218,19 @@ body {
   </div>
   <div id="chat" class="card"></div>
   <div id="input-area" class="card">
-  <textarea id="prompt" rows="2" placeholder="Enter message..."></textarea>
-  <button id="send">Send</button>
+    <div class="json-editor" style="flex:1; display:flex; flex-direction:column; gap:8px;">
+      <div class="editor-toolbar">
+        <span id="json-status" class="status muted">Waiting for JSON…</span>
+      </div>
+      <textarea id="prompt" rows="6" placeholder="Enter JSON body here..."></textarea>
+    </div>
+    <div class="send-col">
+      <div class="send-tools">
+        <button id="btn-format" class="ghost-btn" title="Format JSON">Format</button>
+        <button id="btn-minify" class="ghost-btn" title="Minify JSON">Minify</button>
+      </div>
+      <button id="send">Send</button>
+    </div>
   </div>
 </div>
 <script>
@@ -208,6 +238,10 @@ const chat = document.getElementById('chat');
 const sendBtn = document.getElementById('send');
 const urlEl = document.getElementById('url');
 const tokenEl = document.getElementById('token');
+const promptEl = document.getElementById('prompt');
+const statusEl = document.getElementById('json-status');
+const formatBtn = document.getElementById('btn-format');
+const minifyBtn = document.getElementById('btn-minify');
 const importBtn = document.getElementById('import-config');
 const exportBtn = document.getElementById('export-config');
 const configFileEl = document.getElementById('config-file');
@@ -256,6 +290,88 @@ function hydrateConfig(cfg) {
 urlEl.addEventListener('input', saveConfigToLocal);
 tokenEl.addEventListener('input', saveConfigToLocal);
 
+// JSON editor helpers
+const LAST_JSON_KEY = 'sse_client_last_json_v1';
+function setJsonStatus(ok, msg){
+  if(statusEl){
+    statusEl.textContent = msg || (ok ? 'Valid JSON' : '');
+    statusEl.classList.toggle('ok', !!ok);
+    statusEl.classList.toggle('err', !ok);
+  }
+  if(promptEl){
+    promptEl.classList.toggle('json-ok', !!ok);
+    promptEl.classList.toggle('json-err', !ok && promptEl.value.trim().length > 0);
+  }
+  if(sendBtn){ sendBtn.disabled = !ok; }
+}
+function positionToLineCol(text, pos){
+  let line = 1, col = 1;
+  for(let i=0;i<pos && i<text.length;i++){
+    if(text[i] === '\n'){ line++; col = 1; } else { col++; }
+  }
+  return {line, col};
+}
+function validateJson(){
+  if(!promptEl) return null;
+  const v = promptEl.value.trim();
+  if(!v){ setJsonStatus(false, ''); return null; }
+  try {
+    const obj = JSON.parse(v);
+    setJsonStatus(true, 'Valid JSON');
+    try { localStorage.setItem(LAST_JSON_KEY, JSON.stringify(obj)); } catch{}
+    return obj;
+  } catch(e){
+    let msg = e && e.message ? String(e.message) : 'Invalid JSON';
+    const m = msg.match(/position (\d+)/i);
+    if(m){
+      const pos = parseInt(m[1], 10) || 0;
+      const {line, col} = positionToLineCol(promptEl.value, pos);
+      msg += ` (line ${line}, col ${col})`;
+    }
+    setJsonStatus(false, msg);
+    return null;
+  }
+}
+// Load last valid JSON if available
+try {
+  const last = localStorage.getItem(LAST_JSON_KEY);
+  if(last && promptEl){
+    promptEl.value = JSON.stringify(JSON.parse(last), null, 2);
+  }
+} catch{}
+// Initial validation state
+validateJson();
+if(promptEl){
+  promptEl.addEventListener('input', validateJson);
+  // Support Tab indent inside textarea
+  promptEl.addEventListener('keydown', (e) => {
+    if(e.key === 'Tab'){
+      e.preventDefault();
+      const start = promptEl.selectionStart;
+      const end = promptEl.selectionEnd;
+      const value = promptEl.value;
+      const insert = '  ';
+      promptEl.value = value.substring(0, start) + insert + value.substring(end);
+      promptEl.selectionStart = promptEl.selectionEnd = start + insert.length;
+    }
+  });
+}
+// Pretty format
+if(formatBtn){
+  formatBtn.addEventListener('click', () => {
+    const obj = validateJson();
+    if(obj && promptEl){ promptEl.value = JSON.stringify(obj, null, 2); validateJson(); }
+  });
+}
+// Minify
+if(minifyBtn){
+  minifyBtn.addEventListener('click', () => {
+    const obj = validateJson();
+    if(obj && promptEl){ promptEl.value = JSON.stringify(obj); validateJson(); }
+  });
+}
+// (Template button removed)
+
 // Export / Import
 exportBtn.addEventListener('click', () => {
   const data = { url: urlEl.value || '', token: tokenEl.value || '' };
@@ -302,12 +418,15 @@ function scrollToMessage(el) {
 sendBtn.addEventListener('click', async () => {
    const url = document.getElementById('url').value.trim();
    const token = document.getElementById('token').value.trim();
-   const prompt = document.getElementById('prompt').value;
+   const raw = document.getElementById('prompt').value;
    if(!url) return alert('URL required');
-   addMessage(prompt, 'user');
-   document.getElementById('prompt').value = '';
+   const obj = validateJson();
+   if(!obj) return alert('Please provide valid JSON.');
+   const pretty = JSON.stringify(obj, null, 2);
+   addMessage(pretty, 'user');
+   // keep JSON in editor for iteration
    saveConfigToLocal();
-   const body = prompt; // use message as raw request body
+   const body = JSON.stringify(obj); // normalized JSON
    const msgEl = addMessage('', 'assistant');
    const contentEl = msgEl.querySelector('.bubble');
    try {
