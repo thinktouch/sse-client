@@ -132,9 +132,6 @@ body {
   align-items: flex-end;
   padding: 10px;
 }
-#input-area .send-col { display:flex; flex-direction:column; gap:8px; align-items:stretch; }
-#input-area .send-tools { display:flex; flex-direction:column; gap:8px; }
-#input-area .send-col .ghost-btn { width: 100%; }
 #input-area .editor-toolbar {
   display: flex;
   align-items: center;
@@ -180,6 +177,12 @@ body {
   transition: transform .06s ease, filter .12s ease, box-shadow .12s ease;
   box-shadow: 0 2px 8px color-mix(in oklab, var(--primary) 18%, transparent);
 }
+#input-area #send {
+  /* Distinct accent for Send button */
+  background: #10b981; /* emerald-500 */
+  border-color: color-mix(in oklab, #10b981 40%, var(--border));
+  box-shadow: 0 2px 8px color-mix(in oklab, #10b981 24%, transparent);
+}
 #input-area button:hover { filter: brightness(1.05); }
 #input-area button:active { transform: translateY(1px); }
 
@@ -220,16 +223,12 @@ body {
   <div id="input-area" class="card">
     <div class="json-editor" style="flex:1; display:flex; flex-direction:column; gap:8px;">
       <div class="editor-toolbar">
+        <button id="btn-format" class="ghost-btn" title="Format JSON">Format</button>
+        <button id="btn-minify" class="ghost-btn" title="Minify JSON">Minify</button>
+        <button id="send">Send</button>
         <span id="json-status" class="status muted">Waiting for JSON…</span>
       </div>
       <textarea id="prompt" rows="6" placeholder="Enter JSON body here..."></textarea>
-    </div>
-    <div class="send-col">
-      <div class="send-tools">
-        <button id="btn-format" class="ghost-btn" title="Format JSON">Format</button>
-        <button id="btn-minify" class="ghost-btn" title="Minify JSON">Minify</button>
-      </div>
-      <button id="send">Send</button>
     </div>
   </div>
 </div>
@@ -261,29 +260,15 @@ function loadConfigFromLocal() {
     return JSON.parse(raw);
   } catch { return null; }
 }
-async function loadConfigFromFileNearby() {
-  // Attempt to fetch ./sse-client.config.json if hosted via http(s). Ignore errors.
-  try {
-    const res = await fetch('./sse-client.config.json', { cache: 'no-store' });
-    if (!res.ok) return null;
-    const cfg = await res.json();
-    return cfg;
-  } catch { return null; }
-}
 function hydrateConfig(cfg) {
   if (!cfg) return;
   if (typeof cfg.url === 'string') urlEl.value = cfg.url;
   if (typeof cfg.token === 'string') tokenEl.value = cfg.token;
 }
 
-// Initialize config: localStorage first, then optional file override
-(async function initConfig(){
+// Initialize config: only from localStorage
+(function initConfig(){
   hydrateConfig(loadConfigFromLocal());
-  const fileCfg = await loadConfigFromFileNearby();
-  if (fileCfg) {
-    hydrateConfig(fileCfg);
-    saveConfigToLocal();
-  }
 })();
 
 // Persist on change
@@ -396,6 +381,7 @@ configFileEl.addEventListener('change', async () => {
   } catch {}
   configFileEl.value = '';
 });
+// (Removed Load Local button and related logic)
 // Ensure immediate scroll to bottom, bypassing smooth behavior during streaming
 function scrollToBottomInstant() {
   const prev = chat.style.scrollBehavior;
