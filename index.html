@@ -117,11 +117,16 @@ body {
   overflow-wrap: anywhere; /* allow breaking long tokens/URLs */
   word-break: break-word;  /* fallback for older browsers */
 }
+/* Q/A bubble accents */
 .message.user .bubble {
-  background: color-mix(in oklab, var(--primary) 10%, var(--card));
-  border-color: color-mix(in oklab, var(--primary) 28%, var(--border));
+  /* 问：偏青色，表示输入 */
+  background: color-mix(in oklab, #06b6d4 14%, var(--card)); /* cyan-500 */
+  border-color: color-mix(in oklab, #06b6d4 42%, var(--border));
 }
 .message.assistant .bubble {
+  /* 答：偏紫色，表示输出 */
+  background: color-mix(in oklab, #8b5cf6 12%, var(--card)); /* violet-500 */
+  border-color: color-mix(in oklab, #8b5cf6 36%, var(--border));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
