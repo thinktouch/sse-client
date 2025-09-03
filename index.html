@@ -219,6 +219,24 @@ body {
 }
 .ghost-btn:hover { background: var(--soft); }
 
+/* Import/Export button accents */
+#import-config.ghost-btn {
+  border-color: color-mix(in oklab, #06b6d4 40%, var(--border)); /* cyan-500 */
+  background: color-mix(in oklab, #06b6d4 12%, transparent);
+  color: color-mix(in oklab, #06b6d4 80%, var(--text));
+}
+#import-config.ghost-btn:hover {
+  background: color-mix(in oklab, #06b6d4 18%, transparent);
+}
+#export-config.ghost-btn {
+  border-color: color-mix(in oklab, #f59e0b 40%, var(--border)); /* amber-500 */
+  background: color-mix(in oklab, #f59e0b 12%, transparent);
+  color: color-mix(in oklab, #f59e0b 80%, var(--text));
+}
+#export-config.ghost-btn:hover {
+  background: color-mix(in oklab, #f59e0b 18%, transparent);
+}
+
 /* Responsive */
 @media (max-width: 720px) {
   #settings { grid-template-columns: 1fr; grid-template-areas: "url" "token"; }
