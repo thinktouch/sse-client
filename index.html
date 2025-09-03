@@ -125,6 +125,28 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+/* Typing indicator */
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 16px;
+}
+.typing .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.5;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing .dot.dot1 { background: #ef4444; animation-delay: 0s; }    /* red-500 */
+.typing .dot.dot2 { background: #f59e0b; animation-delay: .15s; }  /* amber-500 */
+.typing .dot.dot3 { background: #3b82f6; animation-delay: .30s; }  /* blue-500 */
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
 /* Input area */
 #input-area {
   display: flex;
@@ -415,6 +437,11 @@ sendBtn.addEventListener('click', async () => {
    const body = JSON.stringify(obj); // normalized JSON
    const msgEl = addMessage('', 'assistant');
    const contentEl = msgEl.querySelector('.bubble');
+   // Show a three-dot typing indicator until content starts streaming
+   const typing = document.createElement('div');
+   typing.className = 'typing';
+   typing.innerHTML = '<span class="dot dot1"></span><span class="dot dot2"></span><span class="dot dot3"></span>';
+   contentEl.appendChild(typing);
    try {
      const resp = await fetch(url, {
         method: 'POST',
